@@ -1,0 +1,576 @@
+// ==UserScript==
+// @name         Moodle Quiz Systemy Wbudowane
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Automatyczne wyszukiwanie pytań z quizów Moodle.
+// @author       Rafax
+// @match        *://*/*
+// @grant        none
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  // Ulepszona baza danych pytań i odpowiedzi
+  const quizDatabase = [
+    {
+      question: 'Dopasuj nazwy kategorii systemów czasu rzeczywistego do ich opisów.',
+      answers: [
+        'W systemach o łagodnych wymaganiach czasowych (ang. soft real-time system) - sporadyczne niedotrzymanie ograniczenia czasowego jest niekorzystne ale dopuszczalne. Dane wypracowane z opóźnieniem są przydatne i wykorzystywane w pracy systemu.',
+        'W systemach o rygorystycznych wymaganiach czasowych (ang. hard real-time system) - wymagane jest bezwzględne spełnianie wszystkich wymagań czasowych. Jakiekolwiek niedotrzymanie ograniczenia czasowego jest niedopuszczalne i traktowane jako awaria systemu.',
+        'W systemach o mocnych wymaganiach czasowych (ang. firm real-time system) - dane wypracowane z opóźnieniem są nieprzydatne, ale sytuacja taka (jeśli występuje sporadycznie) nie zagraża poprawności działania całego systemu.'
+      ]
+    },
+    {
+      question: 'Oprogramowanie bazujące na RTOS jest w stanie zareagować na zdarzenia zewnętrzne równie szybko jak oprogramowanie utworzone w oparciu 0 model "bare-metal’”.',
+      answers: [
+        'Fałsz'
+      ]
+    },
+    {
+      question: 'Oprogramowanie bazujące na RTOS zapewnia możliwość uzyskania równie szybkiej reakcji na zdarzenia zewnętrzne jak oprogramowanie utworzone w oparciu o model "bare-metal".',
+      answers: [
+        'Fałsz'
+      ]
+    },
+    {
+      question: 'Proszę wskazać pary liczb o takiej samej wartości dziesiętnej.',
+      answers: [
+        '0x80 (w interpretacji U2) - -128',
+        '0111 1111b - 127',
+        '0x0C - 0000 1100b',
+        '0xFF (w interpretacji NKB) - 255',
+        '0xFF (w interpretacji U2) - -1',
+        '0x80 (w interpretacji NKB) - 128'
+      ]
+    },
+    {
+      question: 'Dopasuj pary instrukcji do ich opisów.',
+      answers: [
+        'Pa = 0x200000 - to operacja wpisania do zmiennej wskaźnikowej stałej wartości liczbowej.',
+        '*Pa= 0x200000; - to operacja wpisania do zmiennej wskazywanej wskaźnikiem stałej wartości liczbowej.',
+        'uint32_t a; - to definicja 32-bitowej zmiennej całkowitej bez znaku.',
+        'uint32_t* Pa; - to definicja wskaźnika (zmiennej wskaźnikowej) na 32-bitową zmienną całkowitą bez znaku.'
+      ]
+    },
+    {
+      question: 'Wyjaśnij, dlaczego modyfikację wybranych bitów rejestru danych (ODR) portu GPIO dobrze jest wykonywać wykorzystując rejestr BSRR (bit set reset register).',
+      answers: [
+        'Ponieważ jest to taka operacja niepodzielna, tj. atomowa (ang. atomic) i dzięki temu nie zostanie przerwana przez żadną funkcję obsługi przerwań (ISR).',
+        'Ponieważ taka operacja jest szybsza niż dostęp za pomocą "normalnej" modyfikacji bitów rejestru ODR.'
+      ]
+    },
+    {
+      question: 'Dopasuj do siebie prawdziwe początki i końce następujących zdań dotyczących przerwań o konfigurowalnym priorytecie.',
+      answers: [
+        'Jeśli przerwanie IRQ[1] ma ustawianą niższą liczbę określającą priorytet (czyli wyższy priorytet) niż przerwanie IRQ[0] i oba przerwania zostaną zgłoszone w tym samym czasie, wtedy - IRQ[1] będzie obsłużone przed IRQ[0].',
+        'Jeśli przerwanie IRQ[1] ma ustawiony taki priorytet jak przerwanie IRQ[0], ale IRQ[0] zostało zgłoszone wcześniej i procesor jest już w trakcie jego obsługi, wtedy - obsługa IRQ[1] będzie opóźniona względem obsługi IRQ[0].'
+      ]
+    },
+    {
+      question: 'Wskaż prawidłowe odpowiedzi dla mikrokontrolerów ARM Cortex-M z rodziny STM32F1xx.',
+      answers: [
+        'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 63 i wartość wpisana do rejestru Auto-reload wynosi 99 wtedy częstotliwość generacji sygnału przerwań ten przez timer będzie wynosiła 10kHz.',
+        'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 0 i wartość wpisana do rejestru Auto-reload wynosi 63 wtedy częstotliwość generacji sygnału przerwań ten przez timer będzie wynosiła 1MHz.',
+        'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 63 i wartość wpisana do rejestru Auto-reload wynosi 0 wtedy częstotliwość generacji sygnału przerwań ten przez timer będzie wynosiła 1MHz.',
+        'Jeśli częstotliwość taktowania timera liczącego w górę wynosi IMHz, wartość wpisana do rejestru Prescaler wynosi 0 i wartość wpisana do rejestru Auto-reload wynosi 999 wtedy cykl generacji przerwań przez ten przez timer będzie miał długość 1 milisekundy.'
+      ]
+    },
+    {
+      question: 'Dopasuj prawidłowe pary.',
+      answers: [
+        'Mnożenie liczb rzeczywistych w arytmetyce stałoprzecinkowej - polega na zastosowaniu dwóch następujących po sobie kroków: mnożeniu liczb całkowitych reprezentujących oba składniki, a następnie skalowaniu uzyskanego wyniku (w postaci liczby całkowitej) poprzez zastosowanie operacji przesunięcia bitowego.',
+        'Dodawanie (lub odejmowanie) liczb rzeczywistych w arytmetyce stałoprzecinkowej - opiera się na użyciu takich samych operacji jak dla liczb całkowitych, ale wymaga wstępnego wyrównania formatu obu składników.'
+      ]
+    },
+    {
+      question: 'Wyspy stałoprzecinkowe to...',
+      answers: [
+        'Dedykowane fragmenty kodu aplikacji, które używają wyłącznie arytmetyki stałoprzecinkowej.'
+      ]
+    },
+    {
+      question: 'Wyjaśnij, w jaki sposób można mierzyć wiele sygnałów analogowych (kanałów) za pomocą pojedynczego przetwornika ADC.',
+      answers: [
+        'Zdefiniowanie grupy kanałów, które będą automatycznie i sekwencyjnie konwertowane przez ADC, uruchomienie konwersji, a po jej zakończeniu odczyt wyników z tablicy w pamięci RAM.',
+        'Konfiguracja multipleksera w ADC w celu wskazania pierwszego kanału, rozpoczęcie procesu konwersji, oczekiwanie na jej zakończenie, a następnie odczyt wyniku konwersji. Powtórzenie tych czynności dla kolejnych kanałów.'
+      ]
+    },
+    {
+      question: 'Charakterystyczne parametry ADC/DAC to: (Na to pytanie jest więcej niż jedna poprawna odpowiedź.)',
+      answers: [
+        'Liczba kanałów - czyli oddzielnych wejściowych lub wyjściowych linii analogowych.',
+        'Rozdzielczość wyrażona liczbą bitów liczby całkowitej będącej wyjściem ADC lub wejściem DAC.',
+        'Czas przetwarzania wyrażony w sekundach (lub prędkość przetwarzania / częstotliwość próbkowania / itd. wyrażona w próbkach na sekundę, SPS).'
+      ]
+    },
+    {
+      question: 'Wskaż prawidłowe sformułowanie(a).',
+      answers: [
+        'Im wyższa częstotliwość komutacji (tj. częstotliwość generowanych impulsów MSI), tym MCU ma mniej czasu na wykonanie określonego algorytmu sterowania zaimplementowanego w funkcji ISR zsynchronizowanej z cyklem pracy generatora MSI.',
+        'Im wyższa częstotliwość komutacji (czyli częstotliwość generowanych impulsów MSI), tym lepsza jakość sterowanego nimi sygnału ciągłego.'
+      ]
+    },
+    {
+      question: 'Deterministyczna komunikacja międzykomputerowa:',
+      answers: [
+        'Opiera się przede wszystkim na odpowiednio zaprojektowanym modelu wymiany danych oraz zastosowanej metodzie bezkolizyjnego dostępu do współdzielonego medium komunikacyjnego.',
+        'Jest wymagana w rozproszonych systemach czasu rzeczywistego.'
+      ]
+    },
+    {
+      question: 'Wskaż prawidłowe sformułowania dotyczące magistrali CAN.',
+      answers: [
+        'W CAN zastosowano taką metodę arbitrażu dostępu wielu nadawców do współdzielonego medium, która gwarantuje deterministyczne dostarczanie komunikatów w zdefiniowanym przedziale czasu.',
+        'CAN jest siecią typu multi-master.',
+        'CAN to magistrala, która efektywnie wspiera komunikację czasu rzeczywistego na odległość do 40 m lub w pewnych warunkach na wyższe odległości.'
+      ]
+    },
+    {
+      question: 'Metoda Round Robin:',
+      answers: [
+        'Bazuje na przydziale kwantu czasu (ang. time slice) do każdego z zadań, po upływie którego następuje automatyczne przełączenie zadań.'
+      ]
+    },
+    {
+      question: 'W RTOS w pierwszej kolejności zawsze będzie się wykonywało zadanie:',
+      answers: [
+        'O najwyższym priorytecie, które nie jest w trybie oczekiwania/zablokowania (tj. WAIT/BLOCKED).'
+      ]
+    },
+    {
+      question: 'Dopasuj słowa kluczowe języka C do ich opisów.',
+      answers: [
+        'Static - oznacza, że przydzielony tak oznaczonej zmiennej obszar pamięci nie zostanie zwolniony w trakcie działania, a zmienna będzie widoczna jedynie w obrębie danego modułu.',
+        'Extern - oznacza, że poprzedzona nim zmienna została zdefiniowana w innym module kodu źródłowego.'
+      ]
+    },
+    {
+      question: 'Dopasuj prawidłowe pary.',
+      answers: [
+        'I2C - to wewnętrzna magistrala szeregowa synchroniczna oferująca komunikację dwukierunkową niejednoczesną (ang. half-duplex).',
+        'Fast Ethernet - to zewnętrzna magistrala szeregowa asynchroniczna pozwalająca na komunikację dwukierunkową jednoczesną (ang. full-duplex).',
+        'SPI - to wewnętrzna magistrala szeregowa synchroniczna pozwalająca na komunikację dwukierunkową jednoczesną (ang. full-duplex).'
+      ]
+    },
+    {
+      question: 'Wskaż prawidłowe sformułowania dotyczące metod komunikacji wyzwalanej zdarzeniami (ang. event-driven) w porównaniu do metody wyzwalanej upływem czasu (ang. time-driven).',
+      answers: [
+        'Wadą komunikacji event-driven (w porównaniu do time-driven) jest dłuższy czas reakcji w sytuacjach, w których występuje nagromadzenie zbyt dużej ilości zdarzeń w krótkim odcinku czasu.',
+        'Zaletą komunikacji event-driven (w porównaniu do time-driven) jest w niektórych sytuacjach krótszy czas reakcji.'
+      ]
+    },
+    {
+      question: 'Dopasuj prawidłowe pary dotyczące modeli interakcji w systemach komunikacji.',
+      answers: [
+        'Model wydawca-prenumerator (ang. publisher-subscriber) - oparty jest na adresowaniu grupowym (ang. multicast).',
+        'Model producent-konsument (ang. producer-consumer) - oparty jest na adresowaniu rozgłoszeniowym (ang. broadcast).',
+        'Model client-serwer (ang. client-server) - oparty jest na jawnym (ang. explicit), indywidualnym (ang. unicast) adresowaniu.'
+      ]
+    },
+    {
+      question: 'Wskaż prawidłowe sformułowania dotyczące warstwy fizycznej magistrali CAN.',
+      answers: [
+        'Magistrala CAN jest oparta na komunikacji za pomocą tzw. "skrętki" jednoparowej i sygnałów różnicowych.',
+        'Magistrala CAN nadaje i jednocześnie odbiera nadawane dane, co przyczynia się do unikania potencjalnych kolizji i wykrywania zakłóceń komunikacji.',
+        'Na magistrali CAN występują dwa stany elektryczne: dominujący i recesywny.'
+      ]
+    },
+    {
+      question: 'Wskaż właściwy opis wyjaśniający skrót RTX z obszaru systemów operacyjnych czasu rzeczywistego.',
+      answers: [
+        'RTX to implementacja jądra (ang. kernel) systemu operacyjnego czasu rzeczywistego.'
+      ]
+    },
+    {
+        question: 'Modyfikator \'volatile\' ...',
+        answers: [
+          'jest konieczny w przypadku definicji wskaźników na fizyczne rejestry znajdujące się w przestrzeni I/O procesora.',
+          'wyłącza optymalizację dostępu do przestrzeni I/O procesora dla opisanej nim zmiennej lub rejestru.'
+        ]
+      },
+      {
+        question: 'Sposób organizacji pamięci komputera, w którym mniej znaczące bajty słowa zapisywane są w komórkach o niższych adresach, nosi nazwę',
+        answers: [
+          'little endian.'
+        ]
+      },
+      {
+        question: 'Wskaż funkcje, jakie może pełnić dyrektywa preprocesora #define.',
+        answers: [
+          'Dyrektywa #define może być wykorzystana do definicji stałych.',
+          'Dyrektywa #define może być wykorzystana do definicji symboli (lub pustych symbol, tj. etykiet).',
+          'Dyrektywa #define może być wykorzystana do tworzenia makrodefinicji.'
+        ]
+      },
+      {
+        question: 'Dopasuj nazwy zjawisk do ich opisów.',
+        answers: [
+          'Zarówno przesłuch jak i przesterowanie - to niekorzystne zjawiska, które mogą prowadzić do nieprawidłowej pracy systemu cyfrowego i z tego powodu muszą być eliminowane.',
+          'Przesłuch (ang. crosstalk) - to efekt polegający na przedostawaniu się zakłóceń z jednego sygnału na drugi sygnał (znajdujący się w pobliżu) podczas szybkiej zmiany stanu pierwszego sygnału.',
+	      'Przesłuch jest większy - gdy szybkość narastania sygnału jest wyższa, tj. czas narastania jest krótszy.',
+          'Przesterowanie (ang. overshoot) - to efekt polegający na przekroczeniu przez sygnał cyfrowy wartości docelowej podczas jego zmiany z wartości niskiej na wysoką lub odwrotnie.'
+        ]
+      },
+      {
+        question: 'Dopasuj nazwę stanu (status), w jakim mogą się znajdować wyjątki w procesorach ARM Cortex-M do do opisu tego stanu.',
+        answers: [
+          'Inactive - Dany wyjątek nie jest aktywny i nie jest oczekujący.',
+          'Blocked - Nie ma takiego stanu wyjątku w procesorach ARM Cortex-M.',
+          'Pending - Wyjątek oczekuje na obsługę ze strony procesora.',
+          'Active - Jest to wyjątek który jest aktualnie przetwarzany przez procesor i jego przetwarzanie nie jest jeszcze zakończone.',
+          'Active and pending - Wyjątek jest aktualnie obsługiwany przez procesor oraz, w tym samym czasie, w wyniku kolejnego zgłoszenia istnieje oczekujący wyjątek pochodzący z tego samego źródła.'
+        ]
+      },
+      {
+        question: 'Wskaż poprawne odpowiedzi. Standard IEEE754 ...',
+        answers: [
+          'jest bardziej wszechstronny i łatwiejszy w użyciu niż arytmetyka stałoprzecinkowa',
+          'ma ograniczoną liczbę cyfr znaczących.',
+          'definiuje trzy pola bitowe (znak, wykładnik i mantysa) w słowie binarnym.'
+        ]
+      },
+      {
+        question: 'Dopasuj prawidłowe wyrażenia.',
+        answers: [
+          'Punkty przerwań w trybie center-aligned - są umieszczone z dala od punktów komutacyjnych.',
+          'W trybie center-align generatora MSI - licznik generatora liczy naprzemiennie, w górę i w dół.',
+          'W trybie edge-align generatora MSI - licznik generatora może liczyć w górę lub w dół w zależności od konfiguracji.'
+        ]
+      },
+      {
+        question: 'Metoda \'Cooperative multitasking\':',
+        answers: [
+          'polega ona na jawnym (tj. w sposób zaprojektowany w każdym zadaniu przez programistę) oddawaniu sterowania w celu umożliwienia pracy kolejnemu zadaniu.'
+        ]
+      },
+      {
+        question: 'Zadanie tła:',
+        answers: [
+          'to zawsze dostępne zadanie o najniższym priorytecie, które może zostać wypełnione kodem użytkownika.'
+        ]
+      },
+      {
+        question: 'Wskaż prawidłowe pary wartości sygnału analogowego podłączonego do wejścia ADC i wyniku konwersji analogowo-cyfrowej. Parametry ADC są następujące: unipolarny zakres przetwarzania (,,VREF-\' = 0V), dodatnie napięcie odniesienia ,,VREF +\' = 3,3V, rozdzielczość przetwarzania wynosi:n = 12 bitów.',
+        answers: [
+          'Wynik przetwarzania wynosi: d = 8192. - To nie jest prawidłowa wartość wyjściowa dla takiego przetwornika.',
+          'Wynik przetwarzania wynosi: d = 2048. - Wartość analogowa na wejściu ADC: u = 1,65V',
+          'Wynik przetwarzania wynosi: d = 0. - Wartość analogowa na wejściu ADC: u = 0V',
+          'Wynik przetwarzania wynosi: d = 4095 - Wartość analogowa na wejściu ADC: u = 3,3V'
+        ]
+      },
+      {
+        question: 'Dopasuj prawidłowe pary.',
+        answers: [
+          'Indywidualne odpytywanie kolejnych urządzeń w ramach cyklu komunikacyjnego to - "Master-Slave pooling mechanism"',
+          'Podział cyklu komunikacyjnego na odcinki czasowe (ang.time-slots) dedykowane dla poszczególnych urządzeń - to mechanizm TDMA',
+          'Mechanizm "Master-Slave burst pooling" - wymaga sieci zbudowanej w oparciu o mechanizm buforowania ramek stosowany na przykład w przełącznikach sieciowych'
+        ]
+      },
+      {
+        question: 'Dopasuj prawidłowe pary dotyczące Ethernetu czasu rzeczywistego.',
+        answers: [
+          'Przy wymaganiach zgodnych z kategorią "hard RT" (tj. "RTClass 2") - typowe jest zastosowanie rozwiązań zgodnych ze standardowym Ethernetem, ale niezgodnych z wyższymi warstwami stosu TCP/IP',
+          'Dla najbardziej rygorystycznych aplikacji typu "isochronous RT" ("RT Class 3") - zazwyczaj wymagane jest zastosowanie rozwiązań niezgodnych ze stosem TCP/IP oraz zastosowanie specjalizowanych sterowników sprzętowych.',
+          'Dla najmniej rygorystycznych wymagań - możliwe jest zastosowanie standardowego stosu TCP/IP.'
+        ]
+      },
+      {
+        question: 'Wskaż, jakiego rzędu są czasy narastania i opadania dla poszczególnych trybów pracy linii GPIO.',
+        answers: [
+          'Tryb najszybszy (ang. fastestmode) linii GPIO mikrokontrolera ARMSTM32-F4 jest rzędu - kilku nanosekund.',
+          'Tryb najwolniejszy (ang.slowestmode) linii GPIO mikrokontrolera ARMSTM32-F4 jest rzędu - 100 nanosekund.'
+        ]
+      },
+      {
+        question: 'Dopasuj prawidłowe sformułowania.',
+        answers: [
+          'Jeśli częstotliwość impulsów wynosi 1 kHz, a współczynnik wypełniania (ang. duty cycle) 50% - wtedy szerokość generowanego impulsu wynosi 500 mikrosekund',
+          'Jeśli okres generowanych impulsów MSI wynosi 50 mikrosekund, a ich szerokość wynosi 10 mikrosekund - wtedy częstotliwość impulsów wynosi 20kHz, a współczynnik wypełniania (ang. duty cycle) 20%'
+        ]
+      },
+      {
+        question: "Wskaż prawidłowe wyniki operacji binarnych, gdzie 'a', 'b' i 'c' to zmienne 8-bitowe bez znaku (uint8_t).",
+        answers: [
+          'a = 0x7F; b = 0x87; c= a | b; - 0xFF',
+          'a = 0x7F; b = 0x87; c=a & b; - 0x07',
+          'a=~(1 << 4); - 0xEF',
+          'a = 0x0F; b= 1<< 6; c=a | b; - 0x4F',
+          'a= 1 << 4 - 0x10',
+          'a = 0x0F; b= a << 4; - 0xF0'
+        ]
+      },
+      {
+        question: 'Dopasuj kod w języku C dla mikrokontrolera ARM Cortex-F4 do opisu efektu jego działania.',
+        answers: [
+          'GPIOB -> ODR = 0;  - Ustawia w stan niski wszystkie linie portu PB.',
+          'GPIOB -> ODR = 0xFFFF; - Ustawia w stan wysoki wszystkie linie portu PB.',
+          'GPIOB -> BSRR = ( (uint32_t)1 << (16+0) );  - Powoduje wyłączenie ustawienie linii PB0 w stan  niski.',
+          'GPIOB -> ODR = (1 << 5); - Powoduje ustawienie linii PB5 w stan wysoki, a  wszystkich pozostałych linii tego portu w stan niski.',
+          '#define GPIOB_ODR *(volatile  uint32_t*)0x40020414 GPIOB_ODR &= ~(1<<5); - Powoduje wyłączenie ustawienie linii PB5 w stan  niski.',
+          '*( (volatile uint32_t*)0x40020414) != ( 1 << 5 ); (Gdzie 0x40020414 to adres rejestru ODR portu  GPIO B w pamięci przestrzeni adresowej mikrokontrolera.) - Powoduje wyłączenie ustawienie linii PB5 w stan  wysoki.',
+          'GPIOB->BSRR= (1 << 0);  - Powoduje wyłączenie ustawienie linii PB0 w stan  wysoki.'
+        ]
+      },
+      {
+        question: 'Wskaż prawidłowe odpowiedzi dotyczące implementacji automatu stanu w języku C',
+        answers: [
+          'Automat stanu musi posiadać pamięć, zaimplementowaną np. w postaci zwykłej zmiennej całkowitej lub zmiennej typu enum.',
+          'Kod automatu stanu najczęściej zawiera konstrukcję switch-case języka C, która jest cyklicznie wywoływana przez pętlę główną programu, przez funkcję obsługi przerwań lub przez wątek systemu operacyjnego.'
+        ]
+      },
+      {
+        question: 'Wskaż kod, który spowoduje zapisanie wartości liczbowej równej 5, do pola bitowego mieszczącego się w bitach b7..b4 zmiennej REG, nie zmieniając przy tym stanu innych bitów tej zmiennej.',
+        answers: [
+          'REG = ( REG & ~(0x0F << 4) )   |   (5<<4);',
+        ]
+      },
+      {
+        question: 'Sekcje krytyczne:',
+        answers: [
+           'Specjalnie oznaczony fragment kodu programu, który musi się wykonać jako nieprzerwany blok.'
+        ]
+      },
+            {
+          question: 'Sekcje krytyczne to: ',
+          answers: [
+           'Specjalnie oznaczony fragment kodu programu, który musi się wykonać jako nieprzerwany blok.',
+        ]
+      },
+      {
+          question: 'Sekcja krytyczna to: ',
+          answers: [
+           'Specjalnie oznaczony fragment kodu programu, który musi się wykonać jako nieprzerwany blok.',
+        ]
+      },
+      {
+        question: 'Wybierz poprawne sformułowania dotyczące metody określanej jako MSI.',
+        answers: [
+          'Czas martwy to czas opóźnienia od chwili wyłączenia jednego z tranzystorów do chwili włączenia drugiego tranzystora w danej gałęzi mostka energoelektronicznego.',
+          'Suma wartości dwóch komplementarnych sygnałów cyfrowych jest zawsze równa jeden. Oznacza to, że dwa komplementarne sygnały cyfrowe nigdy nie są jednocześnie aktywne.'
+        ]
+      },
+      {
+        question: 'Wskaż cechy charakterystyczne pamięci komputerowych typu FLASH.',
+        answers: [
+          'Ograniczona liczba cykli zapisu (typowo w granicach od 10 tysięcy do 1 miliona cykli).',
+          'Dość powolna i skomplikowana procedura kasowania pamięci i zapisu danych w porównaniu do operacji odczytu.',
+          'Nieulotność przechowywanej informacji, tj. jej zachowanie po wyłączeniu zasilania.'
+        ]
+      },
+      {
+        question: 'Zaznacz właściwe określenia pasujące do pojęcia mechanizmu przechwytywania wejścia (ang. input capture) timerów w mikrokontrolerach STM32 ARM Cortex-M.',
+        answers: [
+          'Może współpracować z mechanizmem DMA mikrokontrolera w celu automatycznego transferu zawartości rejestrów do obszaru pamięci operacyjnej wskazanego przez użytkownika.',
+          'Umożliwia zapamiętywanie wartości chwilowych liczników w reakcji na wybrane zdarzenie (tj. zbocze narastające lub opadające) sygnału doprowadzonego do wejścia mikrokontrolera.'
+        ]
+      },
+      {
+        question: 'Zaznaczy wszystkie prawdziwe sformułowania odnoszące się do funkcji zwrotnych bibliotek HAL.',
+        answers: [
+          'Służą do obsługi przerwań.',
+          'Mogą być zrealizowane w postaci funkcji z atrybutem "weak".',
+          'Mogą być zrealizowane w postaci rejestrowanych funkcji zwrotnych (ang. registered callback).',
+          'Są wywoływane przez bibliotekę HAL wyłącznie po wykryciu powiązanego z nimi konkretnego zdarzenia będącego faktycznym źródłem przerwania, nawet jeśli kilka zdarzeń współdzieli pojedynczą funkcję obsługi, tj. IRQ Handler.',
+          'Pozwalają na uczynienie kodu bardziej uniwersalnym, łatwiejszym do przenoszenia pomiędzy różnymi platformami sprzętowymi.'
+        ]
+      },
+      {
+        question: 'Wskaż prawidłowe sformułowania dotyczące magistral równoległych.',
+        answers: [
+          'Im większa liczba linii magistrali danych i im wyższa częstotliwość wysyłania danych, tym większa jest przepustowość (ang. throughput) takiej magistrali.',
+          'Magistrale równoległe są wypierane w wielu współczesnych systemach cyfrowych przez szybkie magistrale szeregowe.'
+        ]
+      },
+      {
+        question: 'Charakterystyczne parametry ADC i DAC to:',
+        answers: [
+          'czas przetwarzania wyrażony w sekundach (lub prędkość przetwarzania / częstotliwość próbkowania / itd. wyrażona w próbkach na sekundę, SPS).',
+          'rozdzielczość wyrażona liczbą bitów liczby całkowitej będącej wyjściem ADC lub wejściem DAC.',
+          'liczba kanałów - czyli oddzielnych wejściowych lub wyjściowych linii analogowych.'
+        ]
+      },
+      {
+        question: 'Wstaw wartości bajtów jakie znajdą się w pamięci RAM po wykonaniu poniższego kodu w procesorze o architekturze Big Endian: volatile uint16_t* pByte; pByte = 0x1002; *pByte = 0x1234;',
+        answers: [
+           '0x1000: 0x00 0x00',
+           '0x1001: 0x01 0x01',
+           '0x1002: 0x02 0x12',
+           '0x1003: 0x03 0x34',
+           '0x1004: 0x04 0x04',
+           '0x1005: 0x05 0x05',
+           '0x1006: 0x06 0x06',
+           '0x1007: 0x07 0x07',
+        ]
+      },
+      {
+        question: 'Wskaż cechy charakterystyczne komputerowych pamięci operacyjnych typu RAM.',
+        answers: [
+          'Bardzo wysoka szybkość zarówno operacji zapisu jak i odczytu.',
+          'Dopuszczalna nieograniczona liczba cykli odczytu i zapisu.',
+          'Ulotność przechowywanej informacji, tj. jej utrata po wyłączeniu zasilania pamięci.',
+          'Dostęp swobodny, czyli możliwość szybkiego dostępu do dowolnych komórek pamięci w dowolnej kolejności.'
+        ]
+      },
+      {
+        question: 'Wskaż prawidłowe opisy kategorii systemów czasu rzeczywistego.',
+        answers: [
+          'W systemach o rygorystycznych wymaganiach czasowych (ang. hard real-time system) - wymagane jest bezwzględne spełnianie wszystkich wymagań czasowych. Jakiekolwiek niedotrzymanie ograniczenia czasowego jest niedopuszczalne i traktowane jest jako awaria systemu.',
+          'W systemach o mocnych wymaganiach czasowych (ang. firm real-time system) - dane wypracowane z opóźnieniem są nieprzydatne, ale sytuacja taka (jeśli występuje sporadycznie) nie zagraża poprawności działania całego systemu.',
+          'W systemach o łagodnych wymaganiach czasowych (ang. soft real-time system) - sporadyczne niedotrzymanie ograniczenia czasowego jest niekorzystne, ale dopuszczalne. Dane wypracowane z opóźnieniem są przydatne i wykorzystywane w pracy systemu.'
+        ]
+      },
+      {
+        question: 'Wskaż prawidłowe odpowiedzi dla mikrokontrolerów ARM Cortex-M z rodziny STM32.',
+        answers: [
+          'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 63 i wartość wpisana do rejestru Auto-reload wynosi 49 wtedy częstotliwość generacji sygnału przerwań przez timer będzie wynosiła 20kHz.',
+          'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 0 i wartość wpisana do rejestru Auto-reload wynosi 63 wtedy częstotliwość generacji sygnału przerwań przez timer będzie wynosiła 1MHz.',
+          'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 1MHz, wartość wpisana do rejestru Prescaler wynosi 0 i wartość wpisana do rejestru Auto-reload wynosi 999 wtedy cykl generacji przerwań przez timer będzie miał długość jednej milisekundy.',
+          'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 63 i wartość wpisana do rejestru Auto-reload wynosi 0 wtedy częstotliwość generacji sygnału przerwań przez timer będzie wynosiła 1MHz.'
+        ]
+      },
+      {
+        question: 'Dopasuj prawidłowe sformułowania.',
+        answers: [
+          'Jeśli częstotliwość impulsów wynosi 1 kHz, a współczynnik wypełnienia (ang. duty cycle) 50%, wtedy szerokość generowanego impulsu wynosi 500 mikrosekund.',
+          'Jeśli okres generowanych impulsów MSI wynosi 50 mikrosekund, a ich szerokość wynosi 5 mikrosekund, wtedy częstotliwość impulsów wynosi 20 kHz, a współczynnik wypełnienia (ang. duty cycle) 10%.'
+        ]
+      },
+      {
+        question: 'Determinizm w komunikacji międzykomputerowej:',
+        answers: [
+          'opiera się przede wszystkim na: odpowiednio zaprojektowanym modelu wymiany danych oraz zastosowanej metodzie bezkolizyjnego dostępu do współdzielonego medium komunikacyjnego.',
+          'jest wymagany w rozproszonych systemach czasu rzeczywistego.'
+        ]
+      },
+      {
+        question: 'Wybierz poprawne zdania. (W tym pytaniu może być więcej niż jedna poprawna odpowiedź)',
+        answers: [
+          'Suma wartości dwóch komplementarnych sygnałów cyfrowych jest zawsze równa jeden. Oznacza to, że dwa komplementarne sygnały cyfrowe nigdy nie są jednocześnie aktywne.',
+          'Czas martwy to czas opóźnienia od chwili wyłączenia jednego z tranzystorów do chwili włączenia drugiego tranzystora w danej gałęzi mostka energoelektronicznego.'
+        ]
+      },
+      {
+          question: 'Wskaż kod, który powoduje zapisanie liczby 4 do pola bitowego mieszczącego się w bitach b10..b8 zmiennej REG, nie zmieniając przy tym stanu innych bitów tej zmiennej.',
+          answers: [
+          'REG = ( REG & ~(0x07 << 8) )  |  (4<<8);',
+        ]
+      },
+            {
+          question: 'Zaznacz wszystkie wyniki wskazanych operacji binarnych, gdzie ‘a’, ‘b’ i ‘c’ to zmienne 8-bitowe bez znaku (uint8_t).',
+          answers: [
+          'a = 0x07; b = a << 4; - 0x70',
+          'a = 1 << 5; - 0x20',
+          'a = 0x0F; b = 1 << 7;c = a | b; - 0,8F',
+          'a = ~( 1 << 4 ); - 0xEF',
+          'a = 0x7F; b = 0x87; c = a | b; - 0xFF'
+        ]
+      },
+            {
+          question: 'Wskaż prawidłowe odpowiedzi dla mikrokontrolerów ARM Cortex-M z rodziny STM32',
+          answers: [
+          'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 0 i wartość wpisana do rejestru Auto-reload wynosi 63 wtedy częstotliwość generacji sygnału przerwań ten przez timer będzie wynosiła 1MHz.',
+          'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 1MHz, wartość wpisana do rejestru Prescaler wynosi 0 i wartość wpisana do rejestru Auto-reload wynosi 999 wtedy cykl generacji przerwań przez ten timer będzie miał długość 1milisekundy.',
+          'Jeśli częstotliwość taktowania timera liczącego w górę wynosi 64MHz, wartość wpisana do rejestru Prescaler wynosi 63 i wartość wpisana do rejestru Auto-reload wynosi 49 wtedy częstotliwość generacji sygnału przerwań ten przez timer będzie wynosiła 20kHz.'
+          ]
+      },
+            {
+          question: 'Wskaż prawidłowe pary wartości sygnału analogowego podłączonego do wejścia ADC i wyniku konwersji analogowo-cyfrowej. Parametry ADC są następujące: unipolarny zakres przetwarzania (“VREF-” = 0V), dodatnie napięcie odniesienia “VREF +” = 10V, rozdzielczość przetwarzania wynosi: n = 8 bitów.',
+          answers: [
+          'Wynik przetwarzania wynosi: d = 0. - Wartość analogowa na wejściu ADC: u ≈ 0V',
+          'Wynik przetwarzania wynosi d = 127. - Wartość analogowa na wejściu ADC: u ≈ 5,0V',
+          'Wynik przetwarzania wynosi d = 255. - Wartość analogowa na wejściu ADC: u ≈ 10,0V',
+          'Wynik przetwarzania wynosi d = 4095. - To nie jest prawidłowa wartość wyjściowa dla takiego przetwornika.'
+        ]
+      },
+      {
+          question: 'Wstaw wartości bajtów jakie znajdą się w pamięci RAM po wykonaniu poniższego kodu w procesorze o architekturze Little Endian: volatile uint32_t* pByte; pByte = 0x1000; *pByte = 0x12345678;',
+          answers: [
+           '0x1000: 0x00 0x78',
+           '0x1001: 0x01 0x56',
+           '0x1002: 0x02 0x34',
+           '0x1003: 0x03 0x12',
+           '0x1004: 0x04 0x04',
+           '0x1005: 0x05 0x05',
+           '0x1006: 0x06 0x06',
+           '0x1007: 0x07 0x07',
+        ]
+      },
+      {
+          question: 'Wskaż prawidłowe zdanie(a).',
+          answers: [
+           'Im wyższa częstotliwość komutacji (tj. częstotliwość generowanych impulsów MSI), tym MCU ma mniej czasu na wykonanie określonego algorytmu sterowania zaimplementowanego w funkcji ISR zsynchronizowanej z cyklem pracy generatora MSI.',
+           'Im wyższa częstotliwość komutacji (czyli częstotliwość generowanych impulsów MSI),  tym lepsza jakość sterowanego nimi sygnału ciągłego.',
+        ]
+      },
+  ];
+
+  // Przechowywanie referencji do otwartego okna
+  let previousWindow = null;
+
+  // Funkcja wyszukiwania
+  function searchQuiz(selectedText) {
+    const results = quizDatabase.filter(
+      (item) =>
+        item.question.toLowerCase().includes(selectedText.toLowerCase()) ||
+        item.answers.some((answer) =>
+          answer.toLowerCase().includes(selectedText.toLowerCase())
+        )
+    );
+
+    if (results.length > 0) {
+      // Zamknięcie poprzedniego okna, jeśli istnieje
+      if (previousWindow && !previousWindow.closed) {
+        previousWindow.close();
+      }
+
+      // Tworzenie zawartości HTML dla nowego okna
+      let htmlContent = `
+        <html>
+        <head>
+          <title>Wyniki wyszukiwania</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #333; }
+            .result { margin-bottom: 20px; }
+            .question { font-weight: bold; color: #007BFF; }
+            .answer { margin-left: 20px; color: #555; }
+          </style>
+        </head>
+        <body>
+          <h1>Wyniki wyszukiwania</h1>
+      `;
+
+      results.forEach((result, index) => {
+        htmlContent += `<div class="result">
+          <p class="question">${index + 1}. Pytanie: ${result.question}</p>
+          <ul>`;
+        result.answers.forEach((answer) => {
+          htmlContent += `<li class="answer">${answer}</li>`;
+        });
+        htmlContent += `</ul></div>`;
+      });
+
+      htmlContent += `
+          <button onclick="window.close()">Zamknij</button>
+        </body>
+        </html>
+      `;
+
+      // Otwieranie nowego okna i wypełnienie go treścią
+      previousWindow = window.open("", "_blank", "width=750,height=800");
+      previousWindow.document.write(htmlContent);
+      previousWindow.document.close();
+    }
+  }
+
+  // Obsługa zaznaczania tekstu
+  document.addEventListener("mouseup", () => {
+    const selectedText = window.getSelection().toString().trim();
+    if (selectedText) {
+      searchQuiz(selectedText);
+    }
+  });
+
+  console.log("Moodle Quiz Helper załadowany.");
+})();

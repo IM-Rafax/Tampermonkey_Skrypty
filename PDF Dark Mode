@@ -1,0 +1,30 @@
+// ==UserScript==
+// @name         PDF Dark Mode
+// @namespace    http://tampermonkey.net/
+// @version      1.1
+// @description  Tryb Ciemny
+// @author       Rafax
+// @match        *://*/*.pdf
+// @match        *://*/*
+// @run-at       document-end
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    var cover = document.createElement("div");
+    let css = `
+        position: fixed;
+        pointer-events: none;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: white;
+        mix-blend-mode: exclusion;
+        z-index: 1;
+    `;
+    cover.setAttribute("style", css);
+    document.body.appendChild(cover);
+})();
