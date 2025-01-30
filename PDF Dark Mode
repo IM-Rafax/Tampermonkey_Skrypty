@@ -5,7 +5,6 @@
 // @description  Tryb Ciemny
 // @author       Rafax
 // @match        *://*/*.pdf
-// @match        *://*/*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
